@@ -34,13 +34,12 @@ class GraspGenerator:
             self.net = torch.load(net_path, map_location='cpu')
             self.device = get_device(force_cpu=True)
 
-        # print (self.net)
+        print (self.net)
 
-        
         self.near = camera.near
         self.far = camera.far
         self.depth_r = depth_radius
-        
+
         self.fig = fig
         self.network = network
 
@@ -133,15 +132,17 @@ class GraspGenerator:
         max_val = np.max(depth)
         depth = depth * (255 / max_val)
         depth = np.clip((depth - depth.mean())/175, -1, 1)
-        
+
         if (self.network == 'GR_ConvNet'):
             ##### GR-ConvNet #####
             depth = np.expand_dims(np.array(depth), axis=2)
             img_data = CameraData(width=self.IMG_WIDTH, height=self.IMG_WIDTH)
             x, depth_img, rgb_img = img_data.get_data(rgb=rgb, depth=depth)
+        elif (self.network == "GGCNN"):
+            x = torch.from_numpy(depth.reshape(1,1,self.IMG_WIDTH, self.IMG_WIDTH).astype(np.float32))
         else:
             print("The selected network has not been implemented yet -- please choose another network!")
-            exit() 
+            exit()
 
         with torch.no_grad():
             xc = x.to(self.device)
@@ -156,9 +157,18 @@ class GraspGenerator:
                                                                 pred['sin'],
                                                                 pred['width'],
                                                                 pixels_max_grasp)
-            else: 
-                print ("you need to add your function here!")        
-        
+            elif (self.network == "GGCNN"):
+                pred = self.net(xc)
+                # print (pred)
+                pixels_max_grasp = int(self.MAX_GRASP * self.PIX_CONVERSION)
+                q_img, ang_img, width_img = self.post_process_output(pred[0],
+                                                                pred[1],
+                                                                pred[2],
+                                                                pred[3],
+                                                                pixels_max_grasp)
+            else:
+                print ("you need to add your function here!")
+
         save_name = None
         if show_output:
             #fig = plt.figure(figsize=(10, 10))
