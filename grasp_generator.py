@@ -128,6 +128,8 @@ class GraspGenerator:
         return q_img, ang_img, width_img
 
     def predict(self, rgb, depth, n_grasps=1, show_output=False):
+        rgb_orig = rgb
+        depth_orig = depth
 
         max_val = np.max(depth)
         depth = depth * (255 / max_val)
@@ -140,15 +142,36 @@ class GraspGenerator:
             x, depth_img, rgb_img = img_data.get_data(rgb=rgb, depth=depth)
         elif (self.network == "GGCNN"):
             x = torch.from_numpy(depth.reshape(1,1,self.IMG_WIDTH, self.IMG_WIDTH).astype(np.float32))
+        elif (self.network == "GAPANet"):
+            color_mean = np.array([0.485, 0.456, 0.406]).reshape(1, 3)
+            color_std = np.array([0.229, 0.224, 0.225]).reshape(1, 3)
+
+            depth_mean = np.array([0.01, 0.01, 0.01]).reshape(1, 3)
+            depth_std = np.array([0.03, 0.03, 0.03]).reshape(1, 3)
+
+            x_color = rgb_orig.astype(np.float32) / 255.
+            x_color = (x_color - color_mean) / color_std
+            x_color = np.expand_dims(np.transpose(x_color, (2, 0, 1)), 0)
+
+            max_depth = np.max(depth_orig)
+            x_depth = depth_orig.astype(np.float32) / max_depth
+            x_depth = np.repeat(np.expand_dims(x_depth, -1), 3, -1)
+            x_depth = (x_depth - depth_mean) / depth_std
+            x_depth = np.expand_dims(np.transpose(x_depth, (2, 0, 1)), 0)
+
+            x_color = torch.from_numpy(x_color).float()
+            x_depth = torch.from_numpy(x_depth).float()
+
+            x_color = x_color.to(self.device)
+            x_depth = x_depth.to(self.device)
         else:
             print("The selected network has not been implemented yet -- please choose another network!")
             exit()
 
         with torch.no_grad():
-            xc = x.to(self.device)
-
             if (self.network == 'GR_ConvNet'):
                 ##### GR-ConvNet #####
+                xc = x.to(self.device)
                 pred = self.net.predict(xc)
                 # print (pred)
                 pixels_max_grasp = int(self.MAX_GRASP * self.PIX_CONVERSION)
@@ -158,8 +181,20 @@ class GraspGenerator:
                                                                 pred['width'],
                                                                 pixels_max_grasp)
             elif (self.network == "GGCNN"):
+                ##### GGCNN #####
+                xc = x.to(self.device)
                 pred = self.net(xc)
                 # print (pred)
+                pixels_max_grasp = int(self.MAX_GRASP * self.PIX_CONVERSION)
+                q_img, ang_img, width_img = self.post_process_output(pred[0],
+                                                                pred[1],
+                                                                pred[2],
+                                                                pred[3],
+                                                                pixels_max_grasp)
+            elif (self.network == "GAPANet"):
+                ##### GAPANet #####
+                self.net = self.net.float()
+                pred = self.net(x_color, x_depth)
                 pixels_max_grasp = int(self.MAX_GRASP * self.PIX_CONVERSION)
                 q_img, ang_img, width_img = self.post_process_output(pred[0],
                                                                 pred[1],

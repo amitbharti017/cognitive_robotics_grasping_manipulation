@@ -28,6 +28,10 @@ class GrasppingScenarios():
             self.IMG_SIZE = 300
             self.network_path = 'trained_models/GGCNN/pretrained_model/ggcnn_weights_cornell/ggcnn_epoch_23_cornell'
             sys.path.append('trained_models/GGCNN')
+        elif (self.network_model == "GAPANet"):
+            self.IMG_SIZE = 320
+            self.network_path = "trained_models/GAPANet/pretrained_model/epoch_21_iou_1.00"
+            sys.path.append('trained_models/GAPANet')
         else:
             # you need to add your network here!
             print("The selected network has not been implemented yet!")
